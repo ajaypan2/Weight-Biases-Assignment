@@ -9,7 +9,9 @@ First this First.
 What is Weight & Biases
 
 Weight & Biases is the AI Developer Platform with tools for training models, fine tuning models and leveraging foundational models.
+
 It has 4 main core components - Core, Models, Weave and Inference.
+
 It also has a Platform (Weight & Biases Platform) which is the kind of foundational infrastructure, tooling, governance scaffolding which support the Weight & biases Products like Core, Weave and Model.
 
 Weight & Biases Platform is available in 3 different deployment options.
@@ -194,7 +196,7 @@ wandb.finish()
 3. Authenticate & run:
 
 
-wandb login --relogin --host=http://<LB-DNS>:8080
+wandb login --relogin --host=http://a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080/home:8080
 python3 run.py
 
 Check runs in the W&B Console → Project: my-awesome-project.
