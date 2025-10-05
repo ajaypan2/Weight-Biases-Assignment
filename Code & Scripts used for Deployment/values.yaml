@@ -1,0 +1,24 @@
+license: XXXXXXXXXXXXX
+
+service:
+  type: LoadBalancer
+
+ingress:
+  enabled: false
+
+auth:
+  enabled: false
+
+mysql:
+  persistence:
+    enabled: true
+    size: "10Gi"
+    storageClass: "ebs-sc"  
+
+resources:
+  limits:
+    cpu: 2
+    memory: 4Gi
+  requests:
+    cpu: 1
+    memory: 2Gi
