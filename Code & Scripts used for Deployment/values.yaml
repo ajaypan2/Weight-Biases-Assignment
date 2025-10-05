@@ -6,9 +6,6 @@ service:
 ingress:
   enabled: false
 
-auth:
-  enabled: false
-
 mysql:
   persistence:
     enabled: true
@@ -21,4 +18,5 @@ resources:
     memory: 4Gi
   requests:
     cpu: 1
+
     memory: 2Gi
