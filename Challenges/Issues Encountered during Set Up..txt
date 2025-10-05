@@ -1,0 +1,147 @@
+Issues Encountered during Set Up.
+
+1.MySQL Pod was in Pending State.
+
+[ec2-user@ip-172-31-26-170 ~]$ kubectl get pods -n wandb 
+
+NAME READY STATUS RESTARTS AGE wandb-9df8c4d57-48c8f 0/1 Init:0/1 0 72s wandb-mysql-0 0/1 Pending 0 72s 
+
+Error : [ec2-user@ip-172-31-26-170 ~]$ kubectl get pvc -n wandb 
+kubectl get pods -n wandb 
+NAME STATUS VOLUME CAPACITY ACCESS MODES STORAGECLASS VOLUMEATTRIBUTESCLASS AGE wandb Pending <unset> 21s NAME READY STATUS RESTARTS AGE wandb-5f997d58f-f8xqh 0/1 Init:0/1 0 21s wandb-mysql-0 0/1 Pending 0 21s
+
+
+Fix :
+
+Upon Troubleshooting i found PVC was not getting bound to EBS Volumes and it was picking up default Storage Class.
+
+Installed the EBS CSI drivers.
+
+Created a CSI StorageClass (ebs-sc)
+
+Deleted Namespace, old PVCs and Helm release
+
+helm uninstall wandb -n wandb
+kubectl delete pvc --all -n wandb
+kubectl delete pv --all
+kubectl delete ns wandb 
+
+
+Updated the values.yaml file to point to correct Storage class.
+
+Installed W&B Helm chart using the new CSI StorageClass
+
+Recreate namespace
+kubectl create namespace wandb
+
+Reinstall W&B
+helm install wandb wandb/wandb -n wandb -f values.yaml
+
+Commands used during troubleshooting.
+
+kubectl describe pod wandb-mysql-0 -n wandb
+
+Kubectl logs wandb-mysql-0 -n wandb
+
+kubectl logs wandb-594cc5d8c7-5xx4t -n wandb -c ensure-volume-permission (init Container)
+
+
+Results after Fix.
+
+[ec2-user@ip-172-31-26-170 ~]$ kubectl get pods,deployments,sts,sc,pvc,pv -n wandb
+NAME                         READY   STATUS    RESTARTS   AGE
+pod/wandb-594cc5d8c7-5xx4t   1/1     Running   0          2d14h
+pod/wandb-mysql-0            1/1     Running   0          2d14h
+
+NAME                    READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/wandb   1/1     1            1           2d17h
+
+NAME                           READY   AGE
+statefulset.apps/wandb-mysql   1/1     2d17h
+
+NAME                                 PROVISIONER             RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+storageclass.storage.k8s.io/ebs-sc   ebs.csi.aws.com         Delete          WaitForFirstConsumer   false                  2d19h
+storageclass.storage.k8s.io/gp2      kubernetes.io/aws-ebs   Delete          WaitForFirstConsumer   false                  2d20h
+
+NAME                          STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/wandb   Bound    pvc-d1ae5f97-07f6-41b7-9608-cf64399c3d89   10Gi       RWO            ebs-sc         <unset>                 2d17h
+
+NAME                                                        CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM         STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+persistentvolume/pvc-d1ae5f97-07f6-41b7-9608-cf64399c3d89   10Gi       RWO            Delete           Bound    wandb/wandb   ebs-sc         <unset>                          2d17h
+[ec2-user@ip-172-31-26-170 ~]$
+
+Things to Note : When i was checking the logs i came across the MySQL Pod has to 2 container. One the main SQL Container and other was ensure volume permission container that runs as init container which check the permissions before the main container runs. 
+
+
+
+Issue 2: License Key was not updating.
+
+Error :ec2-user@ip-172-31-26-170 ~]$ helm install wandb wandb/wandb \ -f wandb1-values.yaml \ --namespace wandb1 --create-namespace Error: INSTALLATION FAILED: execution error at (wandb/templates/secrets.yaml:22:14): license must be specified to deploy with helm.
+
+Fix:
+
+While checking the Values.yaml file found issue with indentation and there was an extra spaces.
+
+Updated the file correctly and reinstall the app. 
+
+
+Issue 3: Runs were not getting synced to W & B Server -401 Permission error 
+
+Error: ec2-user@ip-172-31-26-170 ~]$ python3 wandb_test.py wandb: W&B API key is configured. Use wandb login --relogin to force relogin wandb: ERROR Error uploading run: returned error 401: {"data":{"upsertBucket":null},"errors":[{"message":"user is not logged in","path":["upsertBucket"],"extensions":{"code":"PERMISSION_ERROR"}}]} Traceback (most recent call last): File "/home/ec2-user/wandb_test.py", line 10, in <module> run = wandb.init(project="assignment-test", name=f"run-{i+1}") File "/home/ec2-user/.local/lib/python3.9/site-packages/wandb/sdk/wandb_init.py", line 1601, in init wandb._sentry.reraise(e) File "/home/ec2-user/.local/lib/python3.9/site-packages/wandb/analytics/sentry.py", line 162, in reraise raise exc.with_traceback(sys.exc_info()[2]) File "/home/ec2-user/.local/lib/python3.9/site-packages/wandb/sdk/wandb_init.py", line 1582, in init run = wi.init(run_settings, run_config, run_printer) File "/home/ec2-user/.local/lib/python3.9/site-packages/wandb/sdk/wandb_init.py", line 1025, in init raise error wandb.errors.errors.CommError: Error uploading run: returned error 401: {"data":{"upsertBucket":null},"errors":[{"message":"user is not logged in","path":["upsertBucket"],"extensions":{"code":"PERMISSION_ERROR"}}]} wandb: wandb: 🚀 View run run-1 at: wandb: Find logs at: wandb/run-20251002_110927-46ykyiji/logs [ec2-user@ip-172-31-26-170 ~]$
+
+
+Upon checking the SQL Pods Logs found this : Insufficinet CPU.
+
+Warning FailedScheduling 4m23s default-scheduler 0/2 nodes are available: 2 Insufficient cpu. preemption: 0/2 nodes are available: 2 No preemption victims found for incoming pod. [ec2-user@ip-172-31-26-170 ~]$
+
+
+
+Fix : 
+
+Bump up one more node.
+
+eksctl create nodegroup \
+  --cluster wandb \
+  --name ng-additional \
+  --node-type m5.large \
+  --nodes 1 \
+  --nodes-min 1 \
+  --nodes-max 2
+
+Uninstall & Reinstall the app.
+
+MySQL was schedule on the new node.
+
+Tried to resync the runs and this time it was successful.
+
+
+[ec2-user@ip-172-31-26-170 ~]$ python3 run.py
+wandb: (1) Create a W&B account
+wandb: (2) Use an existing W&B account
+wandb: (3) Don't visualize my results
+wandb: Enter your choice: 2
+wandb: You chose 'Use an existing W&B account'
+wandb: You can find your API key in your browser here: http://a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080/authorize?ref=models
+wandb: Paste an API key from your profile and hit enter, or press ctrl+c to quit: 
+wandb: Appending key for a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080 to your netrc file: /home/ec2-user/.netrc
+wandb: Currently logged in as: ajay to http://a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.22.1
+wandb: Run data is saved locally in /home/ec2-user/wandb/run-20251005_024633-2uopjxnr
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run faithful-feather-15
+wandb: ⭐️ View project at http://a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080/ajay/my-awesome-project
+wandb: 🚀 View run at http://a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080/ajay/my-awesome-project/runs/2uopjxnr
+wandb: 
+wandb: Run history:
+wandb:  acc ▁▂▇▆▇▆▇█
+wandb: loss ▅█▃▃▁▁▁▁
+wandb: 
+wandb: Run summary:
+wandb:  acc 0.96345
+wandb: loss 0.03572
+wandb: 
+wandb: 🚀 View run faithful-feather-15 at: http://a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080/ajay/my-awesome-project/runs/2uopjxnr
+wandb: ⭐️ View project at: http://a5d414f87d2544d19b49d06579dce6a0-1024552980.us-east-1.elb.amazonaws.com:8080/ajay/my-awesome-project
+wandb: Synced 6 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20251005_024633-2uopjxnr/logs
+[ec2-user@ip-172-31-26-170 ~]$ 
