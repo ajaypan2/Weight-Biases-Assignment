@@ -231,6 +231,7 @@ Step 8: Run Experiments
 Install SDK
 
 pip install wandb
+
 Create Python Script (run.py)
 
 import wandb, random
@@ -274,6 +275,6 @@ Object storage (S3/MinIO) can also be configured for artifacts but skipped to ke
 
 I do ran into multiple issue duing the set up. Please check out the Challenges file for the details related to the issue and fix.
 
-Also checkout the Weight & Biases Set up file for more details along with the Screenshots.
+Also checkout the Installation & Deployment doc for more details along with the Screenshots.
 
 Next up i will the Try the Operators option and will share feedback. Thank You.
